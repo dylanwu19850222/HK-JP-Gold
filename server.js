@@ -46,7 +46,14 @@ function handleProxy(req, res, target) {
     },
     (proxyRes) => {
       res.writeHead(proxyRes.statusCode || 500, {
-        ...proxyRes.headers,
+        ...Object.fromEntries(
+          Object.entries(proxyRes.headers).filter(
+            ([k]) =>
+              !["content-encoding", "content-length", "transfer-encoding"].includes(
+                String(k).toLowerCase()
+              )
+          )
+        ),
         "access-control-allow-origin": "*",
         "access-control-allow-headers": "*",
       });

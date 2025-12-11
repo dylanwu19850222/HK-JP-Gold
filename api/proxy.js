@@ -43,8 +43,11 @@ export default async function handler(req, res) {
 
     const headers = {};
     upstream.headers.forEach((v, k) => {
-      headers[k] = v;
+      const key = k.toLowerCase();
+      if (["content-encoding", "content-length", "transfer-encoding"].includes(key)) return;
+      headers[key] = v;
     });
+    headers["content-type"] = headers["content-type"] || "application/octet-stream";
     headers["access-control-allow-origin"] = "*";
     headers["access-control-allow-headers"] = "*";
 
