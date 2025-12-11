@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>金價與匯率看板</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b172a;
+      --card: #13243d;
+      --accent: #f5c242;
+      --text: #f0f4ff;
+      --muted: #a3b3c5;
+      --error: #ff6b6b;
+      --success: #42f56d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(245,194,66,0.08), transparent 25%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 20px 48px;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 26px;
+      letter-spacing: 0.4px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      background: var(--accent);
+      color: #0b0f1c;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 10px 30px rgba(245, 194, 66, 0.25);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); box-shadow: 0 6px 18px rgba(245, 194, 66, 0.28); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 16px 18px;
+      backdrop-filter: blur(8px);
+      position: relative;
+      overflow: hidden;
+      min-height: 138px;
+    }
+    .card:before {
+      content: "";
+      position: absolute;
+      inset: -30% auto auto -30%;
+      width: 60%;
+      height: 60%;
+      background: radial-gradient(circle, rgba(245,194,66,0.08), transparent 55%);
+      pointer-events: none;
+    }
+    .card h2 {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .value { color: var(--text); }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .error {
+      color: var(--error);
+      font-size: 13px;
+      margin-top: 10px;
+      display: none;
+    }
+    .error.show { display: block; }
+    .note {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .calc-card {
+      margin-top: 22px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 18px 18px 8px;
+    }
+    .calc-card h2 { font-size: 18px; margin-bottom: 6px; }
+    .calc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .field label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .field input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+    .field input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(245,194,66,0.2);
+    }
+    .calc-results {
+      margin-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 12px;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .calc-results strong { color: var(--text); }
+    .calc-error { color: var(--error); margin-top: 6px; }
+    @media (max-width: 520px) {
+      body { padding: 22px 16px; }
+      h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>金價與匯率看板</h1>
+      <div class="actions">
+        <span class="meta" id="last-updated">更新中...</span>
+        <button id="refresh-btn">重新整理</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card" id="card-london">
+        <h2>倫敦金價</h2>
+        <p class="subtitle">XAU / USD（瑞士商瑞訊公開報價）</p>
+        <div class="price-row"><span class="label">Bid</span><span class="value" data-bid>--</span></div>
+        <div class="price-row"><span class="label">Ask</span><span class="value" data-ask>--</span></div>
+        <div class="meta" data-meta>資料讀取中...</div>
+        <div class="error" data-error></div>
+      </section>
+
+      <section class="card" id="card-hkd">
+        <h2>港幣兌美元</h2>
+        <p class="subtitle">HKD → USD（由 USD/HKD 倒算）</p>
+        <div class="price-row"><span class="label">Bid</span><span class="value" data-bid>--</span></div>
+        <div class="price-row"><span class="label">Ask</span><span class="value" data-ask>--</span></div>
+        <div class="meta" data-meta>資料讀取中...</div>
+        <div class="error" data-error></div>
+      </section>
+
+      <section class="card" id="card-tanaka">
+        <h2>田中貴金屬</h2>
+        <p class="subtitle">店頭金價（含稅，日圓/公克）</p>
+        <div class="price-row"><span class="label">Bid（買取）</span><span class="value" data-bid>--</span></div>
+        <div class="price-row"><span class="label">Ask（小売）</span><span class="value" data-ask>--</span></div>
+        <div class="meta" data-meta>資料讀取中...</div>
+        <div class="error" data-error></div>
+      </section>
+
+      <section class="card" id="card-jpy">
+        <h2>日圓兌美元</h2>
+        <p class="subtitle">JPY → USD（由 USD/JPY 倒算）</p>
+        <div class="price-row"><span class="label">Bid</span><span class="value" data-bid>--</span></div>
+        <div class="price-row"><span class="label">Ask</span><span class="value" data-ask>--</span></div>
+        <div class="meta" data-meta>資料讀取中...</div>
+        <div class="error" data-error></div>
+      </section>
+    </div>
+
+    <p class="note">
+      資料來源：瑞士商瑞訊（Swissquote）公共報價 API、田中貴金屬官方價格頁。
+      為解決跨網域限制，請求會先打到本機伺服器的 /proxy 再轉發。數據僅供參考，實際交易價格請以官方平台為準。
+    </p>
+
+    <section class="calc-card" id="calc">
+      <h2>每公斤價差計算器</h2>
+      <p class="subtitle">流程：香港以倫敦金價買入 → 付港幣運費（換成美元）→ 抵日以田中貴金屬價格賣出 → 換回美元</p>
+      <div class="calc-grid">
+        <div class="field">
+          <label for="kg-input">買入黃金重量（公斤）</label>
+          <input id="kg-input" type="number" min="0" step="0.001" value="1">
+        </div>
+        <div class="field">
+          <label for="ship-input">運費（港幣）</label>
+          <input id="ship-input" type="number" min="0" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label for="disc-input">日本賣出下浮（日圓/克）</label>
+          <input id="disc-input" type="number" min="0" step="1" value="0">
+        </div>
+      </div>
+      <div class="calc-results" id="calc-results">
+        需等待報價載入後再計算…
+      </div>
+      <div class="calc-error" id="calc-error"></div>
+    </section>
+  </div>
+
+  <script>
+    const proxyBase = "/proxy?url=";
+
+    const cards = {
+      london: document.getElementById("card-london"),
+      hkd: document.getElementById("card-hkd"),
+      tanaka: document.getElementById("card-tanaka"),
+      jpy: document.getElementById("card-jpy"),
+    };
+
+    const state = {
+      london: null,
+      hkdUsd: null,
+      jpyUsd: null,
+      tanaka: null,
+    };
+
+    function formatNumber(value, digits = 3) {
+      if (Number.isFinite(value)) {
+        return new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        }).format(value);
+      }
+      return "--";
+    }
+
+    function updateCard(id, { bid, ask, meta, digits = 3 }) {
+      const card = cards[id];
+      if (!card) return;
+      card.querySelector("[data-bid]").textContent = formatNumber(bid, digits);
+      card.querySelector("[data-ask]").textContent = formatNumber(ask, digits);
+      card.querySelector("[data-meta]").textContent = meta || "";
+      card.querySelector("[data-error]").classList.remove("show");
+      card.querySelector("[data-error]").textContent = "";
+    }
+
+    function showError(id, message) {
+      const card = cards[id];
+      if (!card) return;
+      card.querySelector("[data-error]").textContent = message;
+      card.querySelector("[data-error]").classList.add("show");
+      card.querySelector("[data-meta]").textContent = "—";
+    }
+
+    function proxyUrl(url) {
+      const encoded = encodeURIComponent(url);
+      return `${proxyBase}${encoded}&t=${Date.now()}`;
+    }
+
+    async function fetchThroughProxy(url) {
+      const res = await fetch(proxyUrl(url));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    }
+
+    async function fetchSwissquote(instrument) {
+      const res = await fetchThroughProxy(`https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/${instrument}`);
+      const data = await res.json();
+      const quotes = data.flatMap((item) =>
+        (item.spreadProfilePrices || []).map((p) => ({ bid: p.bid, ask: p.ask, ts: item.ts }))
+      );
+      if (!quotes.length) throw new Error("沒有取得報價");
+      const bestBid = Math.max(...quotes.map((q) => q.bid));
+      const bestAsk = Math.min(...quotes.map((q) => q.ask));
+      const ts = quotes[0].ts ? new Date(quotes[0].ts).toLocaleString() : "";
+      return { bid: bestBid, ask: bestAsk, updated: ts };
+    }
+
+    function invertQuote(pair) {
+      return {
+        bid: 1 / pair.ask,
+        ask: 1 / pair.bid,
+        updated: pair.updated,
+      };
+    }
+
+    function extractYen(text) {
+      if (!text) return null;
+      const cleaned = text.replace(/,/g, "").replace(/[^\d.]/g, "");
+      return parseFloat(cleaned);
+    }
+
+    async function fetchTanaka() {
+      const res = await fetchThroughProxy("https://gold.tanaka.co.jp/commodity/souba/");
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const goldRow = doc.querySelector("#metal_price tr.gold");
+      const askText = goldRow?.querySelector(".retail_tax")?.textContent || "";
+      const bidText = goldRow?.querySelector(".purchase_tax")?.textContent || "";
+      const updated = doc.querySelector("#metal_price_sp h3 span")?.textContent?.trim() || "";
+      const bid = extractYen(bidText);
+      const ask = extractYen(askText);
+      if (!Number.isFinite(bid) || !Number.isFinite(ask)) {
+        throw new Error("無法解析田中貴金屬價格");
+      }
+      return { bid, ask, updated };
+    }
+
+    function renderCalculator() {
+      const resultEl = document.getElementById("calc-results");
+      const errorEl = document.getElementById("calc-error");
+      errorEl.textContent = "";
+
+      if (!state.london || !state.hkdUsd || !state.jpyUsd || !state.tanaka) {
+        resultEl.textContent = "需等待報價載入後再計算…";
+        return;
+      }
+
+      const kg = parseFloat(document.getElementById("kg-input").value) || 0;
+      const shipHkd = parseFloat(document.getElementById("ship-input").value) || 0;
+      const discountJpy = parseFloat(document.getElementById("disc-input").value) || 0;
+      if (kg <= 0) {
+        errorEl.textContent = "請輸入大於 0 的重量（公斤）";
+        return;
+      }
+
+      const OZ_PER_KG = 32.1507466;
+
+      const goldCostUsd = kg * OZ_PER_KG * state.london.ask;
+      const shipUsd = shipHkd * state.hkdUsd.bid; // 以港幣換美元：用 HKD/USD 的 bid
+      const salePerGram = Math.max(0, state.tanaka.bid - discountJpy);
+      const sellJpy = kg * 1000 * salePerGram; // 賣出價（下浮後）JPY/克
+      const receiveUsd = sellJpy * state.jpyUsd.bid; // JPY 換 USD，用 bid
+      const profitUsd = receiveUsd - goldCostUsd - shipUsd;
+
+      const fmt = (n, d = 2) => formatNumber(n, d);
+
+      resultEl.innerHTML = `
+        <div>買入成本（金）：<strong>${fmt(goldCostUsd, 2)} USD</strong> （使用倫敦金 Ask）</div>
+        <div>運費折算：<strong>${fmt(shipUsd, 2)} USD</strong> （港幣 ${fmt(shipHkd, 2)} 以 HKD→USD Bid 換算）</div>
+        <div>日本賣出收入：<strong>${fmt(receiveUsd, 2)} USD</strong> （田中買取價 ${formatNumber(state.tanaka.bid,0)} - 下浮 ${formatNumber(discountJpy,0)} = ${formatNumber(salePerGram,0)} 日圓/克 ×1000g × JPY→USD Bid）</div>
+        <div>每公斤損益：<strong style="color:${profitUsd>=0?"var(--success)":"var(--error)"}">${fmt(profitUsd, 2)} USD</strong></div>
+        <div class="meta">換匯使用：HKD→USD Bid=${formatNumber(state.hkdUsd.bid,5)}，JPY→USD Bid=${formatNumber(state.jpyUsd.bid,6)}</div>
+      `;
+    }
+
+    async function loadData() {
+      const lastUpdated = document.getElementById("last-updated");
+      lastUpdated.textContent = "更新中...";
+      try {
+        const [london, usdHkd, usdJpy, tanaka] = await Promise.all([
+          fetchSwissquote("XAU/USD"),
+          fetchSwissquote("USD/HKD"),
+          fetchSwissquote("USD/JPY"),
+          fetchTanaka(),
+        ]);
+
+        updateCard("london", {
+          bid: london.bid,
+          ask: london.ask,
+          meta: `更新時間：${london.updated}`,
+          digits: 2,
+        });
+        state.london = london;
+
+        const hkdUsd = invertQuote(usdHkd);
+        updateCard("hkd", {
+          bid: hkdUsd.bid,
+          ask: hkdUsd.ask,
+          meta: `更新時間：${usdHkd.updated}`,
+          digits: 5,
+        });
+        state.hkdUsd = hkdUsd;
+
+        const jpyUsd = invertQuote(usdJpy);
+        updateCard("jpy", {
+          bid: jpyUsd.bid,
+          ask: jpyUsd.ask,
+          meta: `更新時間：${usdJpy.updated}`,
+          digits: 6,
+        });
+        state.jpyUsd = jpyUsd;
+
+        updateCard("tanaka", {
+          bid: tanaka.bid,
+          ask: tanaka.ask,
+          meta: tanaka.updated || "田中貴金屬官方公佈時間",
+          digits: 0,
+        });
+        state.tanaka = tanaka;
+
+        lastUpdated.textContent = `最後更新：${new Date().toLocaleString()}`;
+        renderCalculator();
+      } catch (err) {
+        console.error(err);
+        lastUpdated.textContent = "更新失敗";
+        showError("london", "無法取得倫敦金價，請稍後再試");
+        showError("hkd", "無法取得港幣匯率，請稍後再試");
+        showError("jpy", "無法取得日圓匯率，請稍後再試");
+        showError("tanaka", "無法取得田中貴金屬金價，請稍後再試");
+      }
+    }
+
+    document.getElementById("refresh-btn").addEventListener("click", loadData);
+    document.getElementById("kg-input").addEventListener("input", renderCalculator);
+    document.getElementById("ship-input").addEventListener("input", renderCalculator);
+    document.getElementById("disc-input").addEventListener("input", renderCalculator);
+    loadData();
+  </script>
+</body>
+</html>
+
