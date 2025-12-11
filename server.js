@@ -110,7 +110,7 @@ http
 
     const [pathname, queryString] = req.url.split("?");
 
-    if (pathname === "/proxy") {
+    if (pathname === "/proxy" || pathname === "/api/proxy") {
       const params = new URLSearchParams(queryString || "");
       const target = params.get("url");
       return target

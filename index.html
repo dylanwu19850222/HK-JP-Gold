@@ -223,7 +223,7 @@
 
     <p class="note">
       資料來源：瑞士商瑞訊（Swissquote）公共報價 API、田中貴金屬官方價格頁。
-      為解決跨網域限制，請求會先打到本機伺服器的 /proxy 再轉發。數據僅供參考，實際交易價格請以官方平台為準。
+      為解決跨網域限制，前端請求會打到後端 /api/proxy 再轉發。數據僅供參考，實際交易價格請以官方平台為準。
     </p>
 
     <section class="calc-card" id="calc">
@@ -251,7 +251,7 @@
   </div>
 
   <script>
-    const proxyBase = "/proxy?url=";
+    const proxyBase = "/api/proxy?url=";
 
     const cards = {
       london: document.getElementById("card-london"),
