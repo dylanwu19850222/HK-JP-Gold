@@ -251,7 +251,7 @@
 
     <section class="calc-card" id="jp-calc">
       <h2>日本買入／賣出差額計算器</h2>
-      <p class="subtitle">在日本用田中價格（可下浮）買入，再以下浮後價格賣出；熔煉/雜項成本可選擇幣別自動換算</p>
+      <p class="subtitle">公式：利潤 = (D - C) × 重量(克) - B - (D - A) × 重量(克)；D 為田中基準價（使用田中買取價）</p>
       <div class="calc-grid">
         <div class="field">
           <label for="jp-kg">重量（公斤）</label>
@@ -464,11 +464,12 @@
       }
 
       const grams = kg * 1000;
-      const buyPerGram = Math.max(0, state.tanaka.ask - discA);
-      const sellPerGram = Math.max(0, state.tanaka.bid - discC);
+      const baseD = state.tanaka.bid; // 以田中買取價為基準
+      const buyPerGram = Math.max(0, baseD - discA);   // (D - A)
+      const sellPerGram = Math.max(0, baseD - discC);  // (D - C)
 
-      const buyJpy = grams * buyPerGram;
-      const sellJpy = grams * sellPerGram;
+      const buyJpy = grams * buyPerGram;   // (D - A) * kg*1000
+      const sellJpy = grams * sellPerGram; // (D - C) * kg*1000
 
       const miscJpy = toJpy(misc, miscCurr);
       if (miscJpy === null) {
@@ -488,8 +489,9 @@
       const fmt2 = (n) => formatNumber(n, 2);
 
       resultEl.innerHTML = `
-        <div>買入單價：田中小売 ${fmt0(state.tanaka.ask)} - 下浮A ${fmt0(discA)} = <strong>${fmt0(buyPerGram)} 日圓/克</strong></div>
-        <div>賣出單價：田中買取 ${fmt0(state.tanaka.bid)} - 下浮C ${fmt0(discC)} = <strong>${fmt0(sellPerGram)} 日圓/克</strong></div>
+        <div>基準價 D（田中買取）：<strong>${fmt0(baseD)} 日圓/克</strong></div>
+        <div>買入單價：(D - A) = ${fmt0(baseD)} - ${fmt0(discA)} = <strong>${fmt0(buyPerGram)} 日圓/克</strong></div>
+        <div>賣出單價：(D - C) = ${fmt0(baseD)} - ${fmt0(discC)} = <strong>${fmt0(sellPerGram)} 日圓/克</strong></div>
         <div>買入總成本：<strong>${fmt0(buyJpy)} 日圓</strong>（約 ${fmt2(buyUsd)} USD）</div>
         <div>熔煉/雜項成本 B：<strong>${fmt0(miscJpy)} 日圓</strong>（原幣 ${fmt2(misc)} ${miscCurr}，約 ${fmt2(miscUsd)} USD）</div>
         <div>賣出總價金：<strong>${fmt0(sellJpy)} 日圓</strong>（約 ${fmt2(sellUsd)} USD）</div>
