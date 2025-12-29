@@ -248,6 +248,41 @@
       </div>
       <div class="calc-error" id="calc-error"></div>
     </section>
+
+    <section class="calc-card" id="jp-calc">
+      <h2>日本買入／賣出差額計算器</h2>
+      <p class="subtitle">在日本用田中價格（可下浮）買入，再以下浮後價格賣出；熔煉/雜項成本可選擇幣別自動換算</p>
+      <div class="calc-grid">
+        <div class="field">
+          <label for="jp-kg">重量（公斤）</label>
+          <input id="jp-kg" type="number" min="0" step="0.001" value="1">
+        </div>
+        <div class="field">
+          <label for="jp-disc-buy">買入下浮 A（日圓/克，從田中價格減去）</label>
+          <input id="jp-disc-buy" type="number" min="0" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="jp-disc-sell">賣出下浮 C（日圓/克，從田中價格減去）</label>
+          <input id="jp-disc-sell" type="number" min="0" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="jp-misc">熔煉／雜項成本 B</label>
+          <input id="jp-misc" type="number" min="0" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label for="jp-misc-curr">成本幣別</label>
+          <select id="jp-misc-curr">
+            <option value="JPY">JPY</option>
+            <option value="USD">USD</option>
+            <option value="HKD">HKD</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc-results" id="jp-calc-results">
+        需等待報價載入後再計算…
+      </div>
+      <div class="calc-error" id="jp-calc-error"></div>
+    </section>
   </div>
 
   <script>
@@ -265,6 +300,8 @@
       hkdUsd: null,
       jpyUsd: null,
       tanaka: null,
+      usdJpy: null,
+      usdHkd: null,
     };
 
     function formatNumber(value, digits = 3) {
@@ -387,6 +424,80 @@
       `;
     }
 
+    function toJpy(amount, currency) {
+      if (!state.jpyUsd) return null;
+      const usdToJpy = 1 / state.jpyUsd.ask; // USD -> JPY
+      if (currency === "JPY") return amount;
+      if (currency === "USD") return amount * usdToJpy;
+      if (currency === "HKD") {
+        if (!state.hkdUsd) return null;
+        const hkdToUsd = state.hkdUsd.bid;
+        return amount * hkdToUsd * usdToJpy;
+      }
+      return null;
+    }
+
+    function jpyToUsd(amountJpy) {
+      if (!state.jpyUsd) return null;
+      return amountJpy * state.jpyUsd.bid; // JPY -> USD
+    }
+
+    function renderJpCalc() {
+      const resultEl = document.getElementById("jp-calc-results");
+      const errorEl = document.getElementById("jp-calc-error");
+      errorEl.textContent = "";
+
+      if (!state.tanaka || !state.jpyUsd) {
+        resultEl.textContent = "需等待報價載入後再計算…";
+        return;
+      }
+
+      const kg = parseFloat(document.getElementById("jp-kg").value) || 0;
+      const discA = parseFloat(document.getElementById("jp-disc-buy").value) || 0;
+      const discC = parseFloat(document.getElementById("jp-disc-sell").value) || 0;
+      const misc = parseFloat(document.getElementById("jp-misc").value) || 0;
+      const miscCurr = document.getElementById("jp-misc-curr").value;
+
+      if (kg <= 0) {
+        errorEl.textContent = "請輸入大於 0 的重量（公斤）";
+        return;
+      }
+
+      const grams = kg * 1000;
+      const buyPerGram = Math.max(0, state.tanaka.ask - discA);
+      const sellPerGram = Math.max(0, state.tanaka.bid - discC);
+
+      const buyJpy = grams * buyPerGram;
+      const sellJpy = grams * sellPerGram;
+
+      const miscJpy = toJpy(misc, miscCurr);
+      if (miscJpy === null) {
+        errorEl.textContent = "尚未取得匯率，請稍後再試";
+        return;
+      }
+
+      const totalCostJpy = buyJpy + miscJpy;
+      const profitJpy = sellJpy - totalCostJpy;
+
+      const buyUsd = jpyToUsd(buyJpy);
+      const sellUsd = jpyToUsd(sellJpy);
+      const miscUsd = jpyToUsd(miscJpy);
+      const profitUsd = jpyToUsd(profitJpy);
+
+      const fmt0 = (n) => formatNumber(n, 0);
+      const fmt2 = (n) => formatNumber(n, 2);
+
+      resultEl.innerHTML = `
+        <div>買入單價：田中小売 ${fmt0(state.tanaka.ask)} - 下浮A ${fmt0(discA)} = <strong>${fmt0(buyPerGram)} 日圓/克</strong></div>
+        <div>賣出單價：田中買取 ${fmt0(state.tanaka.bid)} - 下浮C ${fmt0(discC)} = <strong>${fmt0(sellPerGram)} 日圓/克</strong></div>
+        <div>買入總成本：<strong>${fmt0(buyJpy)} 日圓</strong>（約 ${fmt2(buyUsd)} USD）</div>
+        <div>熔煉/雜項成本 B：<strong>${fmt0(miscJpy)} 日圓</strong>（原幣 ${fmt2(misc)} ${miscCurr}，約 ${fmt2(miscUsd)} USD）</div>
+        <div>賣出總價金：<strong>${fmt0(sellJpy)} 日圓</strong>（約 ${fmt2(sellUsd)} USD）</div>
+        <div>利潤：<strong style="color:${profitJpy>=0?"var(--success)":"var(--error)"}">${fmt0(profitJpy)} 日圓</strong>（約 ${fmt2(profitUsd)} USD）</div>
+        <div class="meta">匯率：JPY→USD Bid=${formatNumber(state.jpyUsd.bid,6)}，USD→JPY 約=${formatNumber(1/state.jpyUsd.ask,3)}；HKD→USD Bid=${state.hkdUsd ? formatNumber(state.hkdUsd.bid,5) : "--"}</div>
+      `;
+    }
+
     async function loadData() {
       const lastUpdated = document.getElementById("last-updated");
       lastUpdated.textContent = "更新中...";
@@ -414,6 +525,7 @@
           digits: 5,
         });
         state.hkdUsd = hkdUsd;
+        state.usdHkd = usdHkd;
 
         const jpyUsd = invertQuote(usdJpy);
         updateCard("jpy", {
@@ -423,6 +535,7 @@
           digits: 6,
         });
         state.jpyUsd = jpyUsd;
+        state.usdJpy = usdJpy;
 
         updateCard("tanaka", {
           bid: tanaka.bid,
@@ -434,6 +547,7 @@
 
         lastUpdated.textContent = `最後更新：${new Date().toLocaleString()}`;
         renderCalculator();
+        renderJpCalc();
       } catch (err) {
         console.error(err);
         lastUpdated.textContent = "更新失敗";
@@ -448,6 +562,11 @@
     document.getElementById("kg-input").addEventListener("input", renderCalculator);
     document.getElementById("ship-input").addEventListener("input", renderCalculator);
     document.getElementById("disc-input").addEventListener("input", renderCalculator);
+    document.getElementById("jp-kg").addEventListener("input", renderJpCalc);
+    document.getElementById("jp-disc-buy").addEventListener("input", renderJpCalc);
+    document.getElementById("jp-disc-sell").addEventListener("input", renderJpCalc);
+    document.getElementById("jp-misc").addEventListener("input", renderJpCalc);
+    document.getElementById("jp-misc-curr").addEventListener("change", renderJpCalc);
     loadData();
   </script>
 </body>
