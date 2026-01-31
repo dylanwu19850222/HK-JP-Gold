@@ -2,6 +2,7 @@
 const ALLOW_HOSTS = new Set([
   "forex-data-feed.swissquote.com",
   "gold.tanaka.co.jp",
+  "www.google.com",
 ]);
 
 function isAllowed(targetUrl) {
@@ -36,8 +37,8 @@ export default async function handler(req, res) {
     const upstream = await fetch(target, {
       method: "GET",
       headers: {
-        "User-Agent": "hk-jp-gold-proxy/1.0",
-        Accept: "*/*",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       },
     });
 
