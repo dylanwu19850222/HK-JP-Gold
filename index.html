@@ -593,13 +593,14 @@
     async function loadData() {
       const lastUpdated = document.getElementById("last-updated");
       lastUpdated.textContent = "更新中...";
+      
+      // 1. 先載入核心數據 (原有功能)
       try {
-        const [london, usdHkd, usdJpy, tanaka, usdt] = await Promise.all([
+        const [london, usdHkd, usdJpy, tanaka] = await Promise.all([
           fetchSwissquote("XAU/USD"),
           fetchSwissquote("USD/HKD"),
           fetchSwissquote("USD/JPY"),
           fetchTanaka(),
-          fetchGoogleUsdt(),
         ]);
 
         updateCard("london", {
@@ -638,25 +639,31 @@
         });
         state.tanaka = tanaka;
 
+        lastUpdated.textContent = `最後更新：${new Date().toLocaleString()}`;
+        renderCalculator();
+        renderJpCalc();
+      } catch (err) {
+        console.error("Core data fetch failed:", err);
+        lastUpdated.textContent = "核心數據更新失敗";
+        showError("london", "無法取得倫敦金價");
+        showError("hkd", "無法取得港幣匯率");
+        showError("jpy", "無法取得日圓匯率");
+        showError("tanaka", "無法取得田中貴金屬金價");
+      }
+
+      // 2. 獨立載入 USDT (新功能)，失敗不影響前者
+      try {
+        const usdt = await fetchGoogleUsdt();
         updateSimpleCard("usdt", {
           price: usdt.price,
           meta: `更新時間：${usdt.updated}`,
           digits: 2,
         });
         state.usdt = usdt;
-
-        lastUpdated.textContent = `最後更新：${new Date().toLocaleString()}`;
-        renderCalculator();
-        renderJpCalc();
         renderUsdtCalc();
       } catch (err) {
-        console.error(err);
-        lastUpdated.textContent = "更新失敗";
-        showError("london", "無法取得倫敦金價，請稍後再試");
-        showError("hkd", "無法取得港幣匯率，請稍後再試");
-        showError("jpy", "無法取得日圓匯率，請稍後再試");
-        showError("tanaka", "無法取得田中貴金屬金價，請稍後再試");
-        showError("usdt", "無法取得 USDT 價格，請稍後再試");
+        console.error("USDT fetch failed:", err);
+        showError("usdt", "無法取得 USDT 價格 (請確認 Server 已重啟並允許 Google)");
       }
     }
 
