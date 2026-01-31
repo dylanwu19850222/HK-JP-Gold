@@ -117,7 +117,7 @@ function setMetric(el, value, sub, isError = false) {
   const valEl = el.querySelector(".metric-value");
   const subEl = el.querySelector(".metric-sub");
   
-  el.classList.remove("skeleton");
+  valEl.classList.remove("skeleton");
   if (isError) {
     valEl.textContent = "Error";
     valEl.classList.add("trend-down");
