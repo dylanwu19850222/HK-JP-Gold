@@ -9,6 +9,7 @@ const ROOT = process.cwd();
 const ALLOW_HOSTS = new Set([
   "forex-data-feed.swissquote.com",
   "gold.tanaka.co.jp",
+  "www.google.com",
 ]);
 
 function sendJson(res, status, payload) {

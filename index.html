@@ -219,10 +219,18 @@
         <div class="meta" data-meta>資料讀取中...</div>
         <div class="error" data-error></div>
       </section>
+
+      <section class="card" id="card-usdt">
+        <h2>USDT 兌日圓</h2>
+        <p class="subtitle">Google Finance 報價</p>
+        <div class="price-row"><span class="label">Price</span><span class="value" data-price>--</span></div>
+        <div class="meta" data-meta>資料讀取中...</div>
+        <div class="error" data-error></div>
+      </section>
     </div>
 
     <p class="note">
-      資料來源：瑞士商瑞訊（Swissquote）公共報價 API、田中貴金屬官方價格頁。
+      資料來源：瑞士商瑞訊（Swissquote）公共報價 API、田中貴金屬官方價格頁、Google Finance。
       為解決跨網域限制，前端請求會打到後端 /api/proxy 再轉發。數據僅供參考，實際交易價格請以官方平台為準。
     </p>
 
@@ -283,6 +291,25 @@
       </div>
       <div class="calc-error" id="jp-calc-error"></div>
     </section>
+
+    <section class="calc-card" id="usdt-calc">
+      <h2>USDT 兌換計算器</h2>
+      <p class="subtitle">計算公式：(Google 報價 + 價差) × USDT 數量</p>
+      <div class="calc-grid">
+        <div class="field">
+          <label for="usdt-amount">USDT 數量</label>
+          <input id="usdt-amount" type="number" min="0" step="1" value="1000">
+        </div>
+        <div class="field">
+          <label for="usdt-spread">價差 (JPY)</label>
+          <input id="usdt-spread" type="number" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="calc-results" id="usdt-calc-results">
+        需等待報價載入後再計算…
+      </div>
+      <div class="calc-error" id="usdt-calc-error"></div>
+    </section>
   </div>
 
   <script>
@@ -293,6 +320,7 @@
       hkd: document.getElementById("card-hkd"),
       tanaka: document.getElementById("card-tanaka"),
       jpy: document.getElementById("card-jpy"),
+      usdt: document.getElementById("card-usdt"),
     };
 
     const state = {
@@ -302,6 +330,7 @@
       tanaka: null,
       usdJpy: null,
       usdHkd: null,
+      usdt: null,
     };
 
     function formatNumber(value, digits = 3) {
@@ -319,6 +348,15 @@
       if (!card) return;
       card.querySelector("[data-bid]").textContent = formatNumber(bid, digits);
       card.querySelector("[data-ask]").textContent = formatNumber(ask, digits);
+      card.querySelector("[data-meta]").textContent = meta || "";
+      card.querySelector("[data-error]").classList.remove("show");
+      card.querySelector("[data-error]").textContent = "";
+    }
+
+    function updateSimpleCard(id, { price, meta, digits = 3 }) {
+      const card = cards[id];
+      if (!card) return;
+      card.querySelector("[data-price]").textContent = formatNumber(price, digits);
       card.querySelector("[data-meta]").textContent = meta || "";
       card.querySelector("[data-error]").classList.remove("show");
       card.querySelector("[data-error]").textContent = "";
@@ -384,6 +422,27 @@
         throw new Error("無法解析田中貴金屬價格");
       }
       return { bid, ask, updated };
+    }
+
+    async function fetchGoogleUsdt() {
+      const res = await fetchThroughProxy("https://www.google.com/finance/quote/USDT-JPY");
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      
+      let price = null;
+      const priceEl = doc.querySelector(".YMlKec.fxKbKc");
+      if (priceEl) {
+        price = parseFloat(priceEl.textContent.replace(/,/g, ""));
+      }
+
+      if (!Number.isFinite(price)) {
+        throw new Error("無法解析 Google USDT 價格");
+      }
+
+      const timeEl = doc.querySelector(".ygUjEc");
+      const updated = timeEl?.textContent?.trim() || new Date().toLocaleString();
+      
+      return { price, updated };
     }
 
     function renderCalculator() {
@@ -500,15 +559,47 @@
       `;
     }
 
+    function renderUsdtCalc() {
+      const resultEl = document.getElementById("usdt-calc-results");
+      const errorEl = document.getElementById("usdt-calc-error");
+      errorEl.textContent = "";
+
+      if (!state.usdt) {
+        resultEl.textContent = "需等待報價載入後再計算…";
+        return;
+      }
+
+      const amount = parseFloat(document.getElementById("usdt-amount").value) || 0;
+      const spread = parseFloat(document.getElementById("usdt-spread").value) || 0;
+
+      if (amount < 0) {
+        errorEl.textContent = "請輸入大於等於 0 的數量";
+        return;
+      }
+
+      const basePrice = state.usdt.price;
+      const finalPrice = basePrice + spread;
+      const totalJpy = amount * finalPrice;
+
+      const fmt = (n, d = 2) => formatNumber(n, d);
+
+      resultEl.innerHTML = `
+        <div>Google 報價：<strong>${fmt(basePrice)} JPY</strong></div>
+        <div>計算匯率：${fmt(basePrice)} + ${fmt(spread)} (價差) = <strong>${fmt(finalPrice)} JPY</strong></div>
+        <div>兌換總額：<strong>${fmt(totalJpy, 0)} JPY</strong></div>
+      `;
+    }
+
     async function loadData() {
       const lastUpdated = document.getElementById("last-updated");
       lastUpdated.textContent = "更新中...";
       try {
-        const [london, usdHkd, usdJpy, tanaka] = await Promise.all([
+        const [london, usdHkd, usdJpy, tanaka, usdt] = await Promise.all([
           fetchSwissquote("XAU/USD"),
           fetchSwissquote("USD/HKD"),
           fetchSwissquote("USD/JPY"),
           fetchTanaka(),
+          fetchGoogleUsdt(),
         ]);
 
         updateCard("london", {
@@ -547,9 +638,17 @@
         });
         state.tanaka = tanaka;
 
+        updateSimpleCard("usdt", {
+          price: usdt.price,
+          meta: `更新時間：${usdt.updated}`,
+          digits: 2,
+        });
+        state.usdt = usdt;
+
         lastUpdated.textContent = `最後更新：${new Date().toLocaleString()}`;
         renderCalculator();
         renderJpCalc();
+        renderUsdtCalc();
       } catch (err) {
         console.error(err);
         lastUpdated.textContent = "更新失敗";
@@ -557,6 +656,7 @@
         showError("hkd", "無法取得港幣匯率，請稍後再試");
         showError("jpy", "無法取得日圓匯率，請稍後再試");
         showError("tanaka", "無法取得田中貴金屬金價，請稍後再試");
+        showError("usdt", "無法取得 USDT 價格，請稍後再試");
       }
     }
 
@@ -569,6 +669,8 @@
     document.getElementById("jp-disc-sell").addEventListener("input", renderJpCalc);
     document.getElementById("jp-misc").addEventListener("input", renderJpCalc);
     document.getElementById("jp-misc-curr").addEventListener("change", renderJpCalc);
+    document.getElementById("usdt-amount").addEventListener("input", renderUsdtCalc);
+    document.getElementById("usdt-spread").addEventListener("input", renderUsdtCalc);
     loadData();
   </script>
 </body>
